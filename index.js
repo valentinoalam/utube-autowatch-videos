@@ -264,101 +264,96 @@ async function main(){
         }
         
         // Wait for video to completely finish using YouTube's time display
-        // await new Promise(async (resolve) => {
-        //   const checkInterval = setInterval(async () => {
-        //     try {
-        //       const videoStatus = await page.evaluate(() => {
-        //         // Get YouTube's time display elements
-        //         const currentTimeEl = document.querySelector('.ytp-time-current');
-        //         const durationEl = document.querySelector('.ytp-time-duration');
-        //         const video = document.querySelector('video');
+        await new Promise(async (resolve) => {
+          const checkInterval = setInterval(async () => {
+            try {
+              const videoStatus = await page.evaluate(() => {
+                // Get YouTube's time display elements
+                const currentTimeEl = document.querySelector('.ytp-time-current');
+                const durationEl = document.querySelector('.ytp-time-duration');
+                const video = document.querySelector('video');
                 
-        //         if (!currentTimeEl || !durationEl || !video) {
-        //           return { found: false };
-        //         }
+                if (!currentTimeEl || !durationEl || !video) {
+                  return { found: false };
+                }
                 
-        //         const currentTimeText = currentTimeEl.textContent.trim();
-        //         const durationText = durationEl.textContent.trim();
+                const currentTimeText = currentTimeEl.textContent.trim();
+                const durationText = durationEl.textContent.trim();
                 
-        //         // Convert time strings (like "5:26") to seconds
-        //         const parseTime = (timeStr) => {
-        //           const parts = timeStr.split(':').reverse();
-        //           let seconds = 0;
-        //           for (let i = 0; i < parts.length; i++) {
-        //             seconds += parseInt(parts[i]) * Math.pow(60, i);
-        //           }
-        //           return seconds;
-        //         };
+                // Convert time strings (like "5:26") to seconds
+                const parseTime = (timeStr) => {
+                  const parts = timeStr.split(':').reverse();
+                  let seconds = 0;
+                  for (let i = 0; i < parts.length; i++) {
+                    seconds += parseInt(parts[i]) * Math.pow(60, i);
+                  }
+                  return seconds;
+                };
                 
-        //         const currentSeconds = parseTime(currentTimeText);
-        //         const durationSeconds = parseTime(durationText);
+                const currentSeconds = parseTime(currentTimeText);
+                const durationSeconds = parseTime(durationText);
                 
-        //         return {
-        //           found: true,
-        //           currentTime: currentSeconds,
-        //           duration: durationSeconds,
-        //           currentTimeText: currentTimeText,
-        //           durationText: durationText,
-        //           ended: video.ended,
-        //           paused: video.paused
-        //         };
-        //       });
+                return {
+                  found: true,
+                  currentTime: currentSeconds,
+                  duration: durationSeconds,
+                  currentTimeText: currentTimeText,
+                  durationText: durationText,
+                  ended: video.ended,
+                  paused: video.paused
+                };
+              });
               
-        //       if (!videoStatus.found) {
-        //         console.log('YouTube time display not found, moving to next');
-        //         clearInterval(checkInterval);
-        //         resolve();
-        //         return;
-        //       }
+              if (!videoStatus.found) {
+                console.log('YouTube time display not found, moving to next');
+                resolve();
+                return;
+              }
               
-        //       // Video has definitely ended
-        //       if (videoStatus.ended) {
-        //         console.log('Video ended naturally');
-        //         clearInterval(checkInterval);
-        //         resolve();
-        //         return;
-        //       }
+              // Video has definitely ended
+              if (videoStatus.ended) {
+                console.log('Video ended naturally');
+                resolve();
+                return;
+              }
               
-        //       // Check if current time equals or is very close to duration (within 2 seconds)
-        //       if (videoStatus.duration > 0 && 
-        //           videoStatus.currentTime >= videoStatus.duration - 2) {
-        //         console.log(`Video completed: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
-        //         clearInterval(checkInterval);
-        //         resolve();
-        //         return;
-        //       }
+              // Check if current time equals or is very close to duration (within 2 seconds)
+              if (videoStatus.duration > 0 && 
+                  videoStatus.currentTime >= videoStatus.duration - 2) {
+                console.log(`Video completed: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+                resolve();
+                return;
+              }
               
-        //       console.log(`Video progress: ${videoStatus.currentTimeText} / ${videoStatus.durationText}`);
+              console.log(`Video progress: ${videoStatus.currentTimeText} / ${videoStatus.durationText}`);
               
-        //     } catch (error) {
-        //       console.log('Error checking video status:', error);
-        //     }
-        //   }, 3000); // Check every 3 seconds
+            } catch (error) {
+              console.log('Error checking video status:', error);
+            }
+          }, 3000); // Check every 3 seconds
           
-        //   // Dynamic timeout based on video duration
-        //   const timeoutDuration = await page.evaluate(() => {
-        //     const durationEl = document.querySelector('.ytp-time-duration');
-        //     if (!durationEl) return 15 * 60 * 1000; // 15 min default
+          // Dynamic timeout based on video duration
+          const timeoutDuration = await page.evaluate(() => {
+            const durationEl = document.querySelector('.ytp-time-duration');
+            if (!durationEl) return videoDuration*1000; // 15 min default
             
-        //     const durationText = durationEl.textContent.trim();
-        //     const parts = durationText.split(':').reverse();
-        //     let seconds = 0;
-        //     for (let i = 0; i < parts.length; i++) {
-        //       seconds += parseInt(parts[i]) * Math.pow(60, i);
-        //     }
+            const durationText = durationEl.textContent.trim();
+            const parts = durationText.split(':').reverse();
+            let seconds = 0;
+            for (let i = 0; i < parts.length; i++) {
+              seconds += parseInt(parts[i]) * Math.pow(60, i);
+            }
             
-        //     // Add 2 minutes buffer to actual video duration
-        //     return (seconds + 120) * 1000;
-        //   });
+            // Add 2 minutes buffer to actual video duration
+            return (seconds + 120) * 1000;
+          });
           
-        //   setTimeout(() => {
-        //     console.log('Video timeout reached, moving to next');
-        //     clearInterval(checkInterval);
-        //     resolve();
-        //   }, timeoutDuration);
-        // });
-        // wait for video to finish
-        await sleep(videoDuration*1000);
+          setTimeout(() => {
+            console.log('Video timeout reached, moving to next');
+            clearInterval(checkInterval);
+            resolve();
+          }, timeoutDuration);
+        });
         console.log(`Finished watching video ${i + 1}`);
     } 
     console.log('Finished watching all videos');
