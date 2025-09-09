@@ -386,16 +386,9 @@ async function main(){
                           if (playButton) playButton.click();
                         });
                       }
-                      
-                      // Try to reload if really stuck
-                      setTimeout(() => {
-                        if (video && video.readyState < 3) {
-                          const reloadButton = document.querySelector('.ytp-play-button.ytp-play-button');
-                          if (reloadButton) reloadButton.click();
-                        }
-                      }, 2000);
                     });
                     
+                    await sleep(2000);
                     // Reset counters after recovery attempt
                     stuckCount = Math.floor(maxStuckChecks / 2);
                     lastStuckTime = currentTime;
@@ -407,31 +400,15 @@ async function main(){
                 lastStuckTime = currentTime;
               }
               
-              // Log progress every 30 seconds
-              if (videoStatus.currentTime % 30 < 2) {
-                console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
-                          `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering})`);
-              }
-              
               // Auto-recovery for common issues
               if (videoStatus.buffering || videoStatus.networkState === 3) {
-                console.log('Video buffering, attempting to improve playback...');
-                // await page.evaluate(() => {
-                //   // Try lower quality
-                //   const settingsButton = document.querySelector('.ytp-settings-button');
-                //   if (settingsButton) {
-                //     settingsButton.click();
-                //     setTimeout(() => {
-                //       const qualityOption = document.querySelector('[data-value="small"], [data-value="tiny"]');
-                //       if (qualityOption) qualityOption.click();
-                //     }, 500);
-                //   }
-                // });
+                console.log('Video buffering...');
               }
               // Check if current time equals or is very close to duration (within 2 seconds)
               if (videoStatus.duration > 0 && 
                   videoStatus.currentTime >= videoStatus.duration - 2) {
-                console.log(`Video completed: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+                console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
+                          `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering})`);
                 clearInterval(checkInterval);
                 resolve();
                 return;
@@ -442,7 +419,7 @@ async function main(){
             } catch (error) {
               console.log('Error checking video status:', error);
             }
-          }, 3000); // Check every 3 seconds
+          }, 6000); // Check every 3 seconds
           
           // Dynamic timeout based on video duration
           const timeoutDuration = await page.evaluate(() => {
