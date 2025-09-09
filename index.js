@@ -82,7 +82,18 @@ async function main(){
     // headless: false,
     // defaultViewport: {width: 1280, height: 720},
     devtools: true,
-    args: [],
+    args: [
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-setuid-sandbox',
+      '--no-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu',
+    ],
 
     customConfig: {},
 
@@ -108,10 +119,13 @@ async function main(){
     'X-Forwarded-For': faker.internet.ip(),
     'X-Real-IP': faker.internet.ip(),
     'Referer': faker.internet.url(),
-    'Origin': faker.internet.url(),
     'DNT': '1',
     'Connection': 'keep-alive',
     'Cache-Control': 'no-cache',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Upgrade-Insecure-Requests': '1',
+
     'Pragma': 'no-cache'
   };
 
