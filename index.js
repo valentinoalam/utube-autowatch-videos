@@ -102,40 +102,22 @@ async function main(){
     
   const page = await browser.newPage();
   
-  // const headers = {
-  //   'Accept-Language': 'en-US,en;q=0.9',
-  //   'User-Agent': faker.internet.userAgent(),
-  //   'X-Forwarded-For': faker.internet.ip(),
-  //   'X-Real-IP': faker.internet.ip(),
-  //   'Referer': faker.internet.url(),
-  //   'Origin': faker.internet.url(),
-  //   'DNT': '1',
-  //   'Connection': 'keep-alive',
-  //   'Cache-Control': 'no-cache',
-  //   'Pragma': 'no-cache'
-  // };
+  const headers = {
+    'Accept-Language': 'en-US,en;q=0.9',
+    'User-Agent': faker.internet.userAgent(),
+    'X-Forwarded-For': faker.internet.ip(),
+    'X-Real-IP': faker.internet.ip(),
+    'Referer': faker.internet.url(),
+    'Origin': faker.internet.url(),
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+  };
 
   // Set realistic user agent
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-  // await page.setExtraHTTPHeaders(headers);
-  // let shouldReset = false
-  // const resetTime = 2700000
-  // const tickTime = 2000
-  // setInterval(() => {
-  //   shouldReset = true
-  // }, resetTime);
-
-  // setInterval(async () => {
-  //   if (shouldReset) {
-  //     console.log(`Restart watchin videos after ${resetTime / 1000 / 60} min`)
-  //     shouldReset = false
-  //     let pages = await browser.pages();
-  //     for (var k in pages) {
-  //       pages[k].close();
-  //     }
-  //     watchVideos()
-  //   }
-  // }, tickTime);
+  await page.setExtraHTTPHeaders(headers);
   const maxOpenedVid = 20
 
   try {
