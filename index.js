@@ -79,7 +79,7 @@ async function main(){
   const { browser } = await connect({
     browserWSEndpoint: wsChromeEndpointurl,
     // executablePath: executablePath,
-    // headless: false,
+    headless: false,
     // defaultViewport: {width: 1280, height: 720},
     devtools: true,
     args: [
@@ -362,8 +362,7 @@ async function main(){
                     if (!video || video.ended) return;
 
                     // Seek forward a bit
-                    video.currentTime = Math.min(video.duration, video.currentTime + 10);
-
+                    video.currentTime += 10;
                     // Ensure playback
                     if (video.paused) {
                       video.play().catch(() => {
