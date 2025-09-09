@@ -384,14 +384,20 @@ async function main(){
             }
 
             // --- Completion check ---
-            if (videoStatus.duration > 0 && videoStatus.currentTime >= videoStatus.duration - 2) {
-              console.log(`Near end: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
-              clearInterval(checkInterval);
+            if (videoStatus.duration > 0 && 
+              videoStatus.currentTime >= videoStatus.duration - 2) {
+              console.log(`Video nearly completed: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+              cleanup();
               resolve();
               return;
             }
 
-            console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+            // Check if current time equals or is very close to duration (within 2 seconds) 
+            if (videoStatus.currentTime % 30 < 2) {
+              console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
+                        `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering})`);
+            }
+ 
           } catch (err) {
             console.log('Error checking video status:', err);
           }
