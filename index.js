@@ -110,7 +110,16 @@ async function main(){
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
       '--memory-pressure-off',
-      
+      '--autoplay-policy=no-user-gesture-required',
+      '--disable-ipc-flooding-protection',
+      '--enable-webrtc-hw-decoding',
+      '--enable-webrtc-hw-encoding',
+      '--enable-features=VaapiVideoDecoder',
+      '--disable-features=UseChromeOSDirectVideoDecoder',
+      '--video-image-texture-target=3553',
+      '--disable-frame-rate-limit',
+      '--disable-vsync', // Can help with smooth playback
+
       // Network & Loading
       '--disable-default-apps',
       '--disable-translate',
@@ -230,13 +239,14 @@ async function main(){
     // Watch each video to completion
     for (var i = 0; i < videoLinks.length; i++) {
         videoUrl = videoLinks[i].href;
-        console.log(`Playing video ${i+1}: ${videoUrl}`);
-
-        console.log(`Watching video ${i + 1}/${videoLinks.length}: ${videoUrl}`);
+        console.log(`Playing video ${i + 1}/${videoLinks.length}: ${videoUrl}`);
         
         // Navigate to video
+        await page.setDefaultNavigationTimeout(60000);
         await page.goto(videoUrl, { waitUntil: 'networkidle2' });
-        await sleep(2000);
+        // Wait for video to load
+        await page.waitForSelector('video', { timeout: 10000 });
+
         // Check for ads and skip if found
         const hasAd = await checkForAds(page);
         
@@ -291,6 +301,8 @@ async function main(){
         let stuckCount = 0;
         let lastStuckTime = 0;
         const maxStuckChecks = 5;
+        let lastLogTime = 0;
+        const logInterval = 30; // seconds
         const checkIntervalMs = 6000;
 
         const parseTime = (timeStr) => {
@@ -299,6 +311,10 @@ async function main(){
           return parts.reduce((total, val, i) => total + (parseInt(val, 10) || 0) * Math.pow(60, i), 0);
         };
 
+        const cleanup = () => {
+          clearInterval(checkInterval);
+          resolve();
+        };
         const checkInterval = setInterval(async () => {
           try {
             const videoStatus = await page.evaluate(() => {
@@ -311,7 +327,7 @@ async function main(){
               if (!currentTimeEl || !durationEl || !video) {
                 return { found: false };
               }
-
+              
               return {
                 found: true,
                 currentTimeText: currentTimeEl.textContent.trim(),
@@ -329,26 +345,24 @@ async function main(){
 
             if (!videoStatus.found) {
               console.log('Time display not found, exiting.');
-              clearInterval(checkInterval);
-              resolve();
+              cleanup()
               return;
             }
 
             // --- End / Error detection ---
             if (videoStatus.ended) {
               console.log('Video ended.');
-              clearInterval(checkInterval);
-              resolve();
+              cleanup();
               return;
             }
             if (videoStatus.error) {
               console.log('Video error detected.');
-              clearInterval(checkInterval);
-              resolve();
+              cleanup();
               return;
             }
 
             // --- Progress & Stuck Detection ---
+          
             const now = Date.now();
             if (videoStatus.currentTime === lastProgress) {
               stuckCount++;
@@ -393,10 +407,14 @@ async function main(){
             }
 
             // Check if current time equals or is very close to duration (within 2 seconds) 
-            if (videoStatus.currentTime % 30 < 2) {
-              console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
-                        `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering})`);
+            if (videoStatus.currentTime - lastLogTime >= logInterval) {
+              console.log(
+                `Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
+                `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering}, networkState: ${videoStatus.networkState})`
+              );
+              lastLogTime = videoStatus.currentTime;
             }
+
  
           } catch (err) {
             console.log('Error checking video status:', err);
@@ -404,24 +422,40 @@ async function main(){
         }, checkIntervalMs);
 
         // --- Timeout fallback ---
-        const timeoutDuration = await page.evaluate(() => {
-          const durationEl = document.querySelector('.ytp-time-duration');
-          if (!durationEl) return 15 * 60 * 1000; // default 15 mins
-
-          const parseTime = (timeStr) => {
-            const parts = timeStr.split(':').reverse();
-            return parts.reduce((total, val, i) => total + (parseInt(val, 10) || 0) * Math.pow(60, i), 0);
-          };
-
-          const seconds = parseTime(durationEl.textContent.trim());
+        // Dynamic timeout based on video duration 
+        const timeoutDuration = await page.evaluate(() => { 
+          const durationEl = document.querySelector('.ytp-time-duration'); 
+          if (!durationEl) return videoDuration*1000; 
+          const durationText = durationEl.textContent.trim(); 
+          const parts = durationText.split(':').reverse(); 
+          let seconds = 0; 
+          for (let i = 0; i < parts.length; i++) { 
+            seconds += parseInt(parts[i]) * Math.pow(60, i);
+          }
           return (seconds + 120) * 1000; // add 2 min buffer
         });
 
-        setTimeout(() => {
-          console.log('Timeout reached, stopping watch.');
-          clearInterval(checkInterval);
-          resolve();
+        setTimeout(async () => {
+          try {
+            const stillPlaying = await page.evaluate(() => {
+              const video = document.querySelector('video');
+              return video && !video.ended && !video.paused;
+            });
+
+            if (stillPlaying) {
+              console.log('Timeout reached but video is still playing — extending watch until natural end.');
+              // Let the interval keep running, don’t resolve yet
+              return;
+            }
+
+            console.log('Timeout reached, stopping watch.');
+            cleanup();
+          } catch (err) {
+            console.log('Timeout check failed:', err);
+            cleanup();
+          }
         }, timeoutDuration);
+
       });
         console.log(`Finished watching video ${i + 1}`);
     } 
