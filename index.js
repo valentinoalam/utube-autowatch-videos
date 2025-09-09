@@ -83,24 +83,50 @@ async function main(){
     // defaultViewport: {width: 1280, height: 720},
     devtools: true,
     args: [
+      // Security & Sandbox (choose one approach)
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-setuid-sandbox',
-      '--no-sandbox',
-      '--disable-blink-features=AutomationControlled',
+      
+      // GPU Acceleration (FIXED - remove conflicts)
+      '--enable-gpu-rasterization',
+      '--enable-zero-copy',
+      '--ignore-gpu-blocklist',
+      '--enable-hardware-overlays',
+      
+      // Performance Optimization
       '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
+      '--disable-accelerated-2d-canvas', // Keep this for memory savings
       '--no-first-run',
       '--no-zygote',
-      '--disable-gpu',
+      
+      // Stealth & Automation
+      '--disable-blink-features=AutomationControlled',
+      
+      // Memory & Resource Management
+      '--disable-extensions',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--memory-pressure-off',
+      
+      // Network & Loading
+      '--disable-default-apps',
+      '--disable-translate',
+      '--disable-sync',
+      
+      // Window & UI
+      '--window-size=1280,720',
+      '--start-maximized'
     ],
-
+    // Additional performance settings
+    defaultViewport: null,
+    ignoreHTTPSErrors: true,
+    dumpio: false, // Reduce console noise
     customConfig: {},
-
     turnstile: true,
-
     connectOption: {},
-
     disableXvfb: true,
     ignoreAllFlags: false,
     // proxy:{
@@ -261,6 +287,10 @@ async function main(){
         
         // Wait for video to completely finish using YouTube's time display
         await new Promise(async (resolve) => {
+          let lastProgress = 0;
+          let stuckCount = 0;
+          const maxStuckChecks = 5;
+          let lastStuckTime = 0;
           const checkInterval = setInterval(async () => {
             try {
               const videoStatus = await page.evaluate(() => {
@@ -268,7 +298,9 @@ async function main(){
                 const currentTimeEl = document.querySelector('.ytp-time-current');
                 const durationEl = document.querySelector('.ytp-time-duration');
                 const video = document.querySelector('video');
-                
+                const bufferingSpinner = document.querySelector('.ytp-spinner');
+                errorDisplay = document.querySelector('.ytp-error');
+
                 if (!currentTimeEl || !durationEl || !video) {
                   return { found: false };
                 }
@@ -296,12 +328,17 @@ async function main(){
                   currentTimeText: currentTimeText,
                   durationText: durationText,
                   ended: video.ended,
-                  paused: video.paused
+                  paused: video.paused,
+                  buffering: !!bufferingSpinner,
+                  error: !!errorDisplay,
+                  readyState: video.readyState,
+                  networkState: video.networkState
                 };
               });
               
               if (!videoStatus.found) {
                 console.log('YouTube time display not found, moving to next');
+                clearInterval(checkInterval);
                 resolve();
                 return;
               }
@@ -309,14 +346,93 @@ async function main(){
               // Video has definitely ended
               if (videoStatus.ended) {
                 console.log('Video ended naturally');
+                clearInterval(checkInterval);
+                resolve();
+                return;
+              }
+              // Check for errors
+              if (videoStatus.error) {
+                console.log('Video error detected, moving on');
+                clearInterval(checkInterval);
                 resolve();
                 return;
               }
               
+              // Advanced stuck detection
+              const currentTime = Date.now();
+              if (videoStatus.currentTime === lastProgress) {
+                stuckCount++;
+                
+                // Only consider it stuck if it's been stuck for a while
+                if (currentTime - lastStuckTime > 10000) { // 10 seconds
+                  console.log(`Video stuck at ${videoStatus.currentTimeText} (count: ${stuckCount})`);
+                  
+                  if (stuckCount >= maxStuckChecks) {
+                    console.log(`Video stuck for too long, attempting recovery...`);
+                    
+                    // Try to fix the stuck video
+                    await page.evaluate(() => {
+                      const video = document.querySelector('video');
+                      
+                      // Try to seek forward a bit
+                      if (video && !video.ended) {
+                        video.currentTime += 10;
+                      }
+                      
+                      // Try to play if paused
+                      if (video && video.paused) {
+                        video.play().catch(() => {
+                          const playButton = document.querySelector('.ytp-play-button');
+                          if (playButton) playButton.click();
+                        });
+                      }
+                      
+                      // Try to reload if really stuck
+                      setTimeout(() => {
+                        if (video && video.readyState < 3) {
+                          const reloadButton = document.querySelector('.ytp-play-button.ytp-play-button');
+                          if (reloadButton) reloadButton.click();
+                        }
+                      }, 2000);
+                    });
+                    
+                    // Reset counters after recovery attempt
+                    stuckCount = Math.floor(maxStuckChecks / 2);
+                    lastStuckTime = currentTime;
+                  }
+                }
+              } else {
+                stuckCount = 0;
+                lastProgress = videoStatus.currentTime;
+                lastStuckTime = currentTime;
+              }
+              
+              // Log progress every 30 seconds
+              if (videoStatus.currentTime % 30 < 2) {
+                console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
+                          `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering})`);
+              }
+              
+              // Auto-recovery for common issues
+              if (videoStatus.buffering || videoStatus.networkState === 3) {
+                console.log('Video buffering, attempting to improve playback...');
+                // await page.evaluate(() => {
+                //   // Try lower quality
+                //   const settingsButton = document.querySelector('.ytp-settings-button');
+                //   if (settingsButton) {
+                //     settingsButton.click();
+                //     setTimeout(() => {
+                //       const qualityOption = document.querySelector('[data-value="small"], [data-value="tiny"]');
+                //       if (qualityOption) qualityOption.click();
+                //     }, 500);
+                //   }
+                // });
+              }
               // Check if current time equals or is very close to duration (within 2 seconds)
               if (videoStatus.duration > 0 && 
                   videoStatus.currentTime >= videoStatus.duration - 2) {
                 console.log(`Video completed: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+                clearInterval(checkInterval);
                 resolve();
                 return;
               }
@@ -345,7 +461,7 @@ async function main(){
           });
           
           setTimeout(() => {
-            console.log('Video timeout reached, moving to next');
+            console.log('Video duration exceeded');
             clearInterval(checkInterval);
             resolve();
           }, timeoutDuration);
