@@ -37,7 +37,7 @@ async function checkForAds(page) {
                     if (skipButton) {
                         await skipButton.click();
                         console.log('Skipped ad');
-                        await page.waitFor(1000); // Wait for skip to process
+                        await sleep(1000); // Wait for skip to process
                     }
                 } catch (skipError) {
                     console.log('Could not skip ad:', skipError.message);
