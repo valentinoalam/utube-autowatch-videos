@@ -287,162 +287,137 @@ async function main(){
         
         // Wait for video to completely finish using YouTube's time display
         await new Promise(async (resolve) => {
-          let lastProgress = 0;
-          let stuckCount = 0;
-          const maxStuckChecks = 5;
-          let lastStuckTime = 0;
-          const checkInterval = setInterval(async () => {
-            try {
-              const videoStatus = await page.evaluate(() => {
-                // Get YouTube's time display elements
-                const currentTimeEl = document.querySelector('.ytp-time-current');
-                const durationEl = document.querySelector('.ytp-time-duration');
-                const video = document.querySelector('video');
-                const bufferingSpinner = document.querySelector('.ytp-spinner');
-                errorDisplay = document.querySelector('.ytp-error');
+        let lastProgress = 0;
+        let stuckCount = 0;
+        let lastStuckTime = 0;
+        const maxStuckChecks = 5;
+        const checkIntervalMs = 6000;
 
-                if (!currentTimeEl || !durationEl || !video) {
-                  return { found: false };
-                }
-                
-                const currentTimeText = currentTimeEl.textContent.trim();
-                const durationText = durationEl.textContent.trim();
-                
-                // Convert time strings (like "5:26") to seconds
-                const parseTime = (timeStr) => {
-                  const parts = timeStr.split(':').reverse();
-                  let seconds = 0;
-                  for (let i = 0; i < parts.length; i++) {
-                    seconds += parseInt(parts[i]) * Math.pow(60, i);
-                  }
-                  return seconds;
-                };
-                
-                const currentSeconds = parseTime(currentTimeText);
-                const durationSeconds = parseTime(durationText);
-                
-                return {
-                  found: true,
-                  currentTime: currentSeconds,
-                  duration: durationSeconds,
-                  currentTimeText: currentTimeText,
-                  durationText: durationText,
-                  ended: video.ended,
-                  paused: video.paused,
-                  buffering: !!bufferingSpinner,
-                  error: !!errorDisplay,
-                  readyState: video.readyState,
-                  networkState: video.networkState
-                };
-              });
-              
-              if (!videoStatus.found) {
-                console.log('YouTube time display not found, moving to next');
-                clearInterval(checkInterval);
-                resolve();
-                return;
+        const parseTime = (timeStr) => {
+          if (!timeStr) return 0;
+          const parts = timeStr.split(':').reverse();
+          return parts.reduce((total, val, i) => total + (parseInt(val, 10) || 0) * Math.pow(60, i), 0);
+        };
+
+        const checkInterval = setInterval(async () => {
+          try {
+            const videoStatus = await page.evaluate(() => {
+              const currentTimeEl = document.querySelector('.ytp-time-current');
+              const durationEl = document.querySelector('.ytp-time-duration');
+              const video = document.querySelector('video');
+              const bufferingSpinner = document.querySelector('.ytp-spinner');
+              const errorDisplay = document.querySelector('.ytp-error');
+
+              if (!currentTimeEl || !durationEl || !video) {
+                return { found: false };
               }
-              
-              // Video has definitely ended
-              if (videoStatus.ended) {
-                console.log('Video ended naturally');
-                clearInterval(checkInterval);
-                resolve();
-                return;
-              }
-              // Check for errors
-              if (videoStatus.error) {
-                console.log('Video error detected, moving on');
-                clearInterval(checkInterval);
-                resolve();
-                return;
-              }
-              
-              // Advanced stuck detection
-              const currentTime = Date.now();
-              if (videoStatus.currentTime === lastProgress) {
-                stuckCount++;
-                
-                // Only consider it stuck if it's been stuck for a while
-                if (currentTime - lastStuckTime > 10000) { // 10 seconds
-                  console.log(`Video stuck at ${videoStatus.currentTimeText} (count: ${stuckCount})`);
-                  
-                  if (stuckCount >= maxStuckChecks) {
-                    console.log(`Video stuck for too long, attempting recovery...`);
-                    
-                    // Try to fix the stuck video
-                    await page.evaluate(() => {
-                      const video = document.querySelector('video');
-                      
-                      // Try to seek forward a bit
-                      if (video && !video.ended) {
-                        video.currentTime += 10;
-                      }
-                      
-                      // Try to play if paused
-                      if (video && video.paused) {
-                        video.play().catch(() => {
-                          const playButton = document.querySelector('.ytp-play-button');
-                          if (playButton) playButton.click();
-                        });
-                      }
-                    });
-                    
-                    await sleep(2000);
-                    // Reset counters after recovery attempt
-                    stuckCount = Math.floor(maxStuckChecks / 2);
-                    lastStuckTime = currentTime;
-                  }
-                }
-              } else {
-                stuckCount = 0;
-                lastProgress = videoStatus.currentTime;
-                lastStuckTime = currentTime;
-              }
-              
-              // Auto-recovery for common issues
-              if (videoStatus.buffering || videoStatus.networkState === 3) {
-                console.log('Video buffering...');
-              }
-              // Check if current time equals or is very close to duration (within 2 seconds)
-              if (videoStatus.duration > 0 && 
-                  videoStatus.currentTime >= videoStatus.duration - 2) {
-                console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
-                          `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering})`);
-                clearInterval(checkInterval);
-                resolve();
-                return;
-              }
-              
-              console.log(`Video progress: ${videoStatus.currentTimeText} / ${videoStatus.durationText}`);
-              
-            } catch (error) {
-              console.log('Error checking video status:', error);
+
+              return {
+                found: true,
+                currentTimeText: currentTimeEl.textContent.trim(),
+                durationText: durationEl.textContent.trim(),
+                currentTime: video.currentTime,
+                duration: video.duration,
+                ended: video.ended,
+                paused: video.paused,
+                buffering: !!bufferingSpinner,
+                error: !!errorDisplay,
+                readyState: video.readyState,
+                networkState: video.networkState,
+              };
+            });
+
+            if (!videoStatus.found) {
+              console.log('Time display not found, exiting.');
+              clearInterval(checkInterval);
+              resolve();
+              return;
             }
-          }, 6000); // Check every 3 seconds
-          
-          // Dynamic timeout based on video duration
-          const timeoutDuration = await page.evaluate(() => {
-            const durationEl = document.querySelector('.ytp-time-duration');
-            if (!durationEl) return videoDuration*1000; // 15 min default
-            
-            const durationText = durationEl.textContent.trim();
-            const parts = durationText.split(':').reverse();
-            let seconds = 0;
-            for (let i = 0; i < parts.length; i++) {
-              seconds += parseInt(parts[i]) * Math.pow(60, i);
+
+            // --- End / Error detection ---
+            if (videoStatus.ended) {
+              console.log('Video ended.');
+              clearInterval(checkInterval);
+              resolve();
+              return;
             }
-            
-            // Add 2 minutes buffer to actual video duration
-            return (seconds + 120) * 1000;
-          });
-          
-          setTimeout(() => {
-            console.log('Video duration exceeded');
-            clearInterval(checkInterval);
-            resolve();
-          }, timeoutDuration);
+            if (videoStatus.error) {
+              console.log('Video error detected.');
+              clearInterval(checkInterval);
+              resolve();
+              return;
+            }
+
+            // --- Progress & Stuck Detection ---
+            const now = Date.now();
+            if (videoStatus.currentTime === lastProgress) {
+              stuckCount++;
+              if (now - lastStuckTime > 10000 && videoStatus.buffering) {
+                console.log(`Video stuck at ${videoStatus.currentTimeText} (count: ${stuckCount})`);
+
+                if (stuckCount >= maxStuckChecks) {
+                  console.log(`Attempting recovery...`);
+                  await page.evaluate(() => {
+                    const video = document.querySelector('video');
+                    if (!video || video.ended) return;
+
+                    // Seek forward a bit
+                    video.currentTime = Math.min(video.duration, video.currentTime + 10);
+
+                    // Ensure playback
+                    if (video.paused) {
+                      video.play().catch(() => {
+                        const btn = document.querySelector('.ytp-play-button');
+                        if (btn) btn.click();
+                      });
+                    }
+                  });
+
+                  await new Promise(r => setTimeout(r, 2000));
+                  stuckCount = Math.floor(maxStuckChecks / 2); // half reset
+                  lastStuckTime = now;
+                }
+              }
+            } else {
+              stuckCount = 0;
+              lastProgress = videoStatus.currentTime;
+              lastStuckTime = now;
+            }
+
+            // --- Completion check ---
+            if (videoStatus.duration > 0 && videoStatus.currentTime >= videoStatus.duration - 2) {
+              console.log(`Near end: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+              clearInterval(checkInterval);
+              resolve();
+              return;
+            }
+
+            console.log(`Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
+          } catch (err) {
+            console.log('Error checking video status:', err);
+          }
+        }, checkIntervalMs);
+
+        // --- Timeout fallback ---
+        const timeoutDuration = await page.evaluate(() => {
+          const durationEl = document.querySelector('.ytp-time-duration');
+          if (!durationEl) return 15 * 60 * 1000; // default 15 mins
+
+          const parseTime = (timeStr) => {
+            const parts = timeStr.split(':').reverse();
+            return parts.reduce((total, val, i) => total + (parseInt(val, 10) || 0) * Math.pow(60, i), 0);
+          };
+
+          const seconds = parseTime(durationEl.textContent.trim());
+          return (seconds + 120) * 1000; // add 2 min buffer
         });
+
+        setTimeout(() => {
+          console.log('Timeout reached, stopping watch.');
+          clearInterval(checkInterval);
+          resolve();
+        }, timeoutDuration);
+      });
         console.log(`Finished watching video ${i + 1}`);
     } 
     console.log('Finished watching all videos');
