@@ -253,37 +253,45 @@ async function main(){
         if (hasAd) {
             console.log('Ad detected, skipping video...');
         }
+        await page.waitForSelector('.ytp-chrome-bottom').then( async()=>
+        {
+          await page.evaluate(() => {
+            const video = document.querySelector('video');
+            video.playbackRate = 1.5;
+            video.play();
+          });
+            // 1. open settings-button
+          const settingsButton = await page.waitForSelector('.ytp-settings-button');
+          await settingsButton.click();
 
-        // 1. open settings-button
-        const settingsButton = await page.waitForSelector('.ytp-settings-button');
-        await settingsButton.click();
+          // 2. open quality-menu item
+          const menuItems = await page.$$('.ytp-panel-menu .ytp-menuitem');
+          for (let i = 0; i < menuItems.length; i++) {
+              const menuItem = menuItems[i];
+              const label = await menuItem.$eval('.ytp-menuitem-label', el => el.textContent);
+              if (label.includes('Quality')) {
+                  console.log("enter quality menu")
+                  await menuItem.click();
+                  break;
+              }
+          }
 
-        // 2. open quality-menu item
-        const menuItems = await page.$$('.ytp-panel-menu .ytp-menuitem');
-        for (let i = 0; i < menuItems.length; i++) {
-            const menuItem = menuItems[i];
-            const label = await menuItem.$eval('.ytp-menuitem-label', el => el.textContent);
-            if (label.includes('Quality')) {
-                console.log("enter quality menu")
-                await menuItem.click();
-                break;
-            }
-        }
+          await sleep(1000);
 
-        await sleep(1000);
-
-        // 3. select 480p quality item
-        await page.waitForSelector('.ytp-quality-menu', {timeout: 60000});
-        const qualityMenuItems = await page.$$('.ytp-quality-menu .ytp-menuitem');
-        for (let i = 0; i < qualityMenuItems.length; i++) {
-            const menuItem = qualityMenuItems[i];
-            const label = await menuItem.$eval('.ytp-menuitem-label', el => el.textContent);
-            if (label.includes('144p')) {
-                console.log("select 144p quality")
-                await menuItem.click();
-                break;
-            }
-        }
+          // 3. select 480p quality item
+          await page.waitForSelector('.ytp-quality-menu', {timeout: 60000});
+          const qualityMenuItems = await page.$$('.ytp-quality-menu .ytp-menuitem');
+          for (let i = 0; i < qualityMenuItems.length; i++) {
+              const menuItem = qualityMenuItems[i];
+              const label = await menuItem.$eval('.ytp-menuitem-label', el => el.textContent);
+              if (label.includes('144p')) {
+                  console.log("select 144p quality")
+                  await menuItem.click();
+                  break;
+              }
+          }
+        });
+        
         await sleep(1000);
         // Wait for video player to load
         await page.waitForSelector('#movie_player', { timeout: 10000 });
@@ -310,6 +318,19 @@ async function main(){
           const parts = timeStr.split(':').reverse();
           return parts.reduce((total, val, i) => total + (parseInt(val, 10) || 0) * Math.pow(60, i), 0);
         };
+        function msToTime(ms) {
+          const seconds = Math.floor((ms / 1000) % 60);
+          const minutes = Math.floor((ms / (1000 * 60)) % 60);
+          const hours = Math.floor(ms / (1000 * 60 * 60));
+
+          if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+          } else if (minutes > 0) {
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          } else {
+            return `0:${seconds.toString().padStart(2, '0')}`;
+          }
+        }
 
         const cleanup = () => {
           clearInterval(checkInterval);
@@ -408,7 +429,7 @@ async function main(){
             // Check if current time equals or is very close to duration (within 2 seconds) 
             if (videoStatus.currentTime - lastLogTime >= logInterval) {
               console.log(
-                `Progress: ${videoStatus.currentTimeText}/${videoStatus.durationText} ` +
+                `Progress: ${msToTime(videoStatus.currentTime)}/${videoStatus.durationText} ` +
                 `(paused: ${videoStatus.paused}, buffering: ${videoStatus.buffering}, networkState: ${videoStatus.networkState})`
               );
               lastLogTime = videoStatus.currentTime;
