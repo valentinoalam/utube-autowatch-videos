@@ -402,7 +402,6 @@ async function main(){
               videoStatus.currentTime >= videoStatus.duration - 2) {
               console.log(`Video nearly completed: ${videoStatus.currentTimeText}/${videoStatus.durationText}`);
               cleanup();
-              resolve();
               return;
             }
 
@@ -414,8 +413,6 @@ async function main(){
               );
               lastLogTime = videoStatus.currentTime;
             }
-
- 
           } catch (err) {
             console.log('Error checking video status:', err);
           }
